@@ -68,16 +68,7 @@ export interface Order {
   id: string;
   firstName: string;
   lastName: string;
-  products: {
-    burnPad: Product;
-    foamPad: Product;
-    bandageHolder: Product;
-    paddockBag: Product;
-    schoolingPad: Product;
-    raincover: Product;
-    blanket: Product;
-    saddle: Product;
-  };
+  products: Record<string, Product>;
   status: 'open' | 'completed' | 'archived';
   cartNumber?: number;
   createdAt: Date;

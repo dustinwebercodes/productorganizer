@@ -15,7 +15,15 @@ interface OrderEntryProps {
   productTemplates: ProductTemplates;
 }
 
-type ProductWithSpecs = Product & { specs?: Record<string, string> };
+type BaseProductField = 'name' | 'quantity' | 'selected';
+type ProductField = BaseProductField | string;
+
+interface ProductWithSpecs {
+  name: string;
+  quantity: number;
+  selected: boolean;
+  specs: Record<string, string>;
+}
 
 const INITIAL_PRODUCTS: Record<string, ProductWithSpecs> = {
   burnPad: { name: 'Burn Pad', quantity: 0, selected: false, specs: {} },
@@ -163,16 +171,16 @@ export default function OrderEntry({ onSubmit, darkMode, orders, productTemplate
     setSelectedCart(null);
   };
 
-  const handleProductChange = (productKey: string, field: string, value: boolean | number | string) => {
+  const handleProductChange = (productKey: string, field: ProductField, value: boolean | number | string) => {
     setProducts(prev => ({
       ...prev,
       [productKey]: {
         ...prev[productKey],
-        specs: field !== 'selected' && field !== 'quantity' 
-          ? { ...prev[productKey].specs, [field]: value as string }
-          : prev[productKey].specs,
-        [field]: field === 'selected' || field === 'quantity' ? value : prev[productKey][field],
-      },
+        ...(field === 'selected' || field === 'quantity' || field === 'name'
+          ? { [field]: value }
+          : { specs: { ...prev[productKey].specs, [field]: value as string } }
+        )
+      }
     }));
   };
 
@@ -185,14 +193,17 @@ export default function OrderEntry({ onSubmit, darkMode, orders, productTemplate
   };
 
   const applyPreviousOrder = (order: Order) => {
-    // Copy products from previous order, but reset quantities
     const newProducts = { ...INITIAL_PRODUCTS };
     Object.entries(order.products).forEach(([key, product]) => {
       if (product.selected) {
         newProducts[key] = {
-          ...product,
+          name: product.name,
           quantity: 0, // Reset quantity
           selected: true, // Keep selected
+          specs: product.specs ? Object.entries(product.specs).reduce((acc, [field, value]) => ({
+            ...acc,
+            [field]: value.toString()
+          }), {}) : {}
         };
       }
     });

@@ -93,16 +93,8 @@ export default function Home() {
   const handleNewOrder = (orderData: {
     firstName: string;
     lastName: string;
-    products: {
-      burnPad: Product;
-      foamPad: Product;
-      bandageHolder: Product;
-      paddockBag: Product;
-      schoolingPad: Product;
-      raincover: Product;
-      blanket: Product;
-      saddle: Product;
-    };
+    products: Record<string, Product>;
+    cartNumber: number;
   }) => {
     const newOrder: Order = {
       id: Date.now().toString(),
