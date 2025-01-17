@@ -146,53 +146,14 @@ export default function Home() {
 
   const handleOrderComplete = async (orderId: string, newStatus: 'open' | 'completed') => {
     try {
-      // If moving from waiting to open, find the first available cart number
-      if (newStatus === 'open') {
-        const occupiedCarts = orders
-          .filter(order => order.status === 'open')
-          .map(order => order.cartNumber);
-        
-        // Find first available cart number (1-10)
-        let availableCart = 1;
-        while (occupiedCarts.includes(availableCart) && availableCart <= 10) {
-          availableCart++;
-        }
-
-        if (availableCart > 10) {
-          alert('No carts available. Please complete some active orders first.');
-          return;
-        }
-
-        // Update order with new status and cart number
-        await updateOrderStatus(orderId, newStatus);
-        await updateOrderProducts(orderId, {
-          ...orders.find(o => o.id === orderId)?.products || {},
-          cartNumber: availableCart
-        });
-
-        setOrders(prev =>
-          prev.map(order =>
-            order.id === orderId
-              ? { 
-                  ...order, 
-                  status: newStatus, 
-                  cartNumber: availableCart,
-                  updatedAt: new Date() 
-                }
-              : order
-          )
-        );
-      } else {
-        // Normal completion flow
-        await updateOrderStatus(orderId, newStatus);
-        setOrders(prev =>
-          prev.map(order =>
-            order.id === orderId
-              ? { ...order, status: newStatus, updatedAt: new Date() }
-              : order
-          )
-        );
-      }
+      await updateOrderStatus(orderId, newStatus);
+      setOrders(prev =>
+        prev.map(order =>
+          order.id === orderId
+            ? { ...order, status: newStatus, updatedAt: new Date() }
+            : order
+        )
+      );
     } catch (error) {
       console.error('Error updating order:', error);
     }

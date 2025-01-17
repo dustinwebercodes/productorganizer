@@ -9,7 +9,7 @@ interface OrdersTableProps {
   orders: Order[];
   title: string;
   darkMode: boolean;
-  onStatusChange?: (orderId: string) => void;
+  onStatusChange?: (orderId: string, newStatus: 'open' | 'completed') => void;
   onArchive?: () => void;
   onUpdateProducts?: (orderId: string, products: Record<string, Product>) => void;
   productTemplates: ProductTemplates;
