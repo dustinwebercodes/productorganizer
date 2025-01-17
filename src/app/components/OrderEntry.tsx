@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Product, ProductSpecs, Order, ProductTemplates } from '../types/order';
+import { Product, Order, ProductTemplates } from '../types/order';
 
 interface OrderEntryProps {
   onSubmit: (order: {
