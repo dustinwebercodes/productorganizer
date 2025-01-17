@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Product, ProductSpecs, Order, ProductTemplates } from '../types/order';
+import { Product, Order, ProductTemplates } from '../types/order';
 
 interface OrderEntryProps {
   onSubmit: (order: {
@@ -263,20 +263,6 @@ export default function OrderEntry({ onSubmit, darkMode, orders, productTemplate
       return;
     }
 
-    // Add console.log to debug
-    console.log('Submitting waiting order:', {
-      firstName,
-      lastName,
-      products: Object.entries(products)
-        .filter(([_, product]) => product.selected)
-        .reduce((acc, [key, product]) => ({
-          ...acc,
-          [key]: product
-        }), {}),
-      cartNumber: 0,
-      status: 'waiting'
-    });
-
     onSubmit({
       firstName,
       lastName,
@@ -298,223 +284,161 @@ export default function OrderEntry({ onSubmit, darkMode, orders, productTemplate
       <div className="mb-6 space-y-4">
         <div className="flex gap-4">
           <div className="flex-1">
-            <label htmlFor="firstName" className={`block text-sm font-medium ${
+            <label className={`block text-sm font-medium mb-1 ${
               darkMode ? 'text-slate-300' : 'text-slate-700'
             }`}>
               First Name
             </label>
             <input
               type="text"
-              id="firstName"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className={`mt-1 block w-full rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
+              className={`w-full px-4 py-2 rounded-md text-sm ${
                 darkMode 
-                  ? 'bg-slate-700 border-slate-600 text-slate-100' 
-                  : 'bg-white border-slate-300 text-slate-900'
-              }`}
-              required
+                  ? 'bg-slate-700 text-slate-200 placeholder-slate-400 border-slate-600' 
+                  : 'bg-white text-slate-900 placeholder-slate-500 border-slate-300'
+              } border focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              placeholder="Enter first name"
             />
           </div>
           <div className="flex-1">
-            <label htmlFor="lastName" className={`block text-sm font-medium ${
+            <label className={`block text-sm font-medium mb-1 ${
               darkMode ? 'text-slate-300' : 'text-slate-700'
             }`}>
               Last Name
             </label>
             <input
               type="text"
-              id="lastName"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              className={`mt-1 block w-full rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
+              className={`w-full px-4 py-2 rounded-md text-sm ${
                 darkMode 
-                  ? 'bg-slate-700 border-slate-600 text-slate-100' 
-                  : 'bg-white border-slate-300 text-slate-900'
-              }`}
-              required
+                  ? 'bg-slate-700 text-slate-200 placeholder-slate-400 border-slate-600' 
+                  : 'bg-white text-slate-900 placeholder-slate-500 border-slate-300'
+              } border focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              placeholder="Enter last name"
             />
           </div>
         </div>
-        
-        {/* Lookup Button */}
-        <button
-          type="button"
-          onClick={() => setShowPreviousOrders(true)}
-          disabled={!firstName.trim() || !lastName.trim() || previousOrders.length === 0}
-          className={`w-full py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${
-            previousOrders.length > 0
-              ? darkMode
-                ? 'bg-green-600 hover:bg-green-700 text-white disabled:bg-slate-800 disabled:text-slate-600'
-                : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-slate-100 disabled:text-slate-400'
-              : darkMode
-                ? 'bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:bg-slate-800 disabled:text-slate-600'
-                : 'bg-slate-200 hover:bg-slate-300 text-slate-700 disabled:bg-slate-100 disabled:text-slate-400'
-          }`}
-        >
-          {previousOrders.length > 0 
-            ? `View Previous Orders (${previousOrders.length})`
-            : 'No Previous Orders'}
-        </button>
 
-        {/* Previous Orders Modal */}
-        {showPreviousOrders && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className={`max-w-2xl w-full rounded-lg shadow-lg ${
-              darkMode ? 'bg-slate-800' : 'bg-white'
-            } p-6`}>
-              <div className="flex justify-between items-center mb-4">
-                <h3 className={`text-lg font-semibold ${
-                  darkMode ? 'text-slate-200' : 'text-slate-800'
-                }`}>
-                  Previous Orders for {firstName} {lastName}
-                </h3>
-                <span className={`text-sm ${
-                  darkMode ? 'text-slate-400' : 'text-slate-600'
-                }`}>
-                  Showing newest to oldest
-                </span>
-              </div>
-              <div className="max-h-96 overflow-y-auto space-y-4">
-                {previousOrders.map((order, index) => (
-                  <div key={order.id} className={`p-4 rounded-lg ${
-                    darkMode ? 'bg-slate-700' : 'bg-slate-50'
-                  }`}>
-                    <div className="flex justify-between items-center mb-2">
-                      <div className={`text-sm ${
-                        darkMode ? 'text-slate-300' : 'text-slate-600'
-                      }`}>
-                        Order Date: {formatDate(order.createdAt)}
-                      </div>
-                      <div className={`text-sm font-medium ${
-                        index === 0 
-                          ? darkMode ? 'text-green-400' : 'text-green-600'
-                          : darkMode ? 'text-slate-400' : 'text-slate-500'
-                      }`}>
-                        {index === 0 ? 'Most Recent Order' : `Order #${previousOrders.length - index}`}
-                      </div>
-                    </div>
-                    <div className={`text-sm ${
-                      darkMode ? 'text-slate-200' : 'text-slate-900'
-                    } space-y-1`}>
-                      {Object.entries(order.products)
-                        .filter(([_, product]) => product.selected)
-                        .map(([key, product]) => (
-                          <div key={key}>
-                            <div className="font-medium">{product.name}</div>
-                            {product.specs && (
-                              <div className="pl-4 text-xs">
-                                {Object.entries(product.specs).map(([spec, value]) => (
-                                  <div key={spec}>
-                                    {formatSpecName(spec)}: {value}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                    </div>
-                    <button
-                      onClick={() => applyPreviousOrder(order)}
-                      className={`mt-4 py-2 px-4 rounded-md text-sm ${
-                        darkMode
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+        {previousOrders.length > 0 && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowPreviousOrders(!showPreviousOrders)}
+              className={`flex items-center gap-2 text-sm ${
+                darkMode ? 'text-slate-300' : 'text-slate-700'
+              }`}
+            >
+              <ChevronIcon expanded={showPreviousOrders} />
+              Previous Orders ({previousOrders.length})
+            </button>
+            
+            {showPreviousOrders && (
+              <div className={`mt-2 p-4 rounded-lg ${
+                darkMode ? 'bg-slate-700' : 'bg-slate-100'
+              }`}>
+                <div className="space-y-4">
+                  {previousOrders.map((order) => (
+                    <div 
+                      key={order.id}
+                      className={`p-4 rounded-lg ${
+                        darkMode ? 'bg-slate-800' : 'bg-white'
                       }`}
                     >
-                      Use These Specs
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex justify-between items-start mb-2">
+                        <div className={`text-sm ${
+                          darkMode ? 'text-slate-300' : 'text-slate-700'
+                        }`}>
+                          {formatDate(order.createdAt)}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => applyPreviousOrder(order)}
+                          className={`text-sm ${
+                            darkMode 
+                              ? 'text-blue-400 hover:text-blue-300'
+                              : 'text-blue-600 hover:text-blue-900'
+                          }`}
+                        >
+                          Apply Products
+                        </button>
+                      </div>
+                      <div className={`text-sm ${
+                        darkMode ? 'text-slate-400' : 'text-slate-600'
+                      }`}>
+                        {Object.entries(order.products)
+                          .filter(([_, product]) => product.selected)
+                          .map(([_, product]) => product.name)
+                          .join(', ')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="mt-6 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowPreviousOrders(false)}
-                  className={`py-2 px-4 rounded-md text-sm ${
-                    darkMode
-                      ? 'bg-slate-700 hover:bg-slate-600 text-slate-200'
-                      : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
-                  }`}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Products Section */}
+      {/* Products */}
       <div className="mb-6">
-        <h3 className={`text-lg font-semibold mb-4 ${
+        <h3 className={`text-lg font-medium mb-4 ${
           darkMode ? 'text-slate-200' : 'text-slate-800'
-        }`}>Custom Products</h3>
+        }`}>
+          Products
+        </h3>
         <div className="space-y-4">
           {Object.entries(products)
-            .sort(([idA, _a], [idB, _b]) => 
-              (productTemplates[idA]?.sortOrder ?? 0) - (productTemplates[idB]?.sortOrder ?? 0)
+            .sort(([a, _], [b, __]) => 
+              productTemplates[a].sortOrder - productTemplates[b].sortOrder
             )
             .map(([key, product]) => (
-              <div key={key} className="space-y-3">
-                <div className="flex items-center space-x-4">
-                  <button
-                    type="button"
-                    onClick={() => handleProductChange(key, 'selected', !product.selected)}
-                    className={`p-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      darkMode 
-                        ? 'text-slate-400 hover:text-slate-300' 
-                        : 'text-slate-600 hover:text-slate-800'
-                    }`}
-                  >
-                    <ChevronIcon expanded={product.selected} />
-                  </button>
-                  <label
-                    htmlFor={key}
-                    className={`flex-1 ${
-                      product.selected
-                        ? darkMode ? 'text-slate-200' : 'text-slate-900'
-                        : darkMode ? 'text-slate-400' : 'text-slate-400'
-                    }`}
-                  >
-                    {product.name}
-                  </label>
+              <div key={key}>
+                <div className="flex items-center gap-4 mb-2">
                   <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={product.quantity}
-                    onChange={(e) => handleProductChange(key, 'quantity', parseInt(e.target.value) || 0)}
-                    disabled={!product.selected}
-                    className={`w-16 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 text-center ${
-                      darkMode 
-                        ? 'bg-slate-700 border-slate-600 text-slate-100' 
-                        : 'bg-white border-slate-300 text-slate-900'
-                    }`}
-                    placeholder="Qty"
+                    type="checkbox"
+                    checked={product.selected}
+                    onChange={(e) => handleProductChange(key, 'selected', e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                   />
+                  <span className={`text-sm font-medium ${
+                    darkMode ? 'text-slate-200' : 'text-slate-800'
+                  }`}>
+                    {product.name}
+                  </span>
+                  {product.selected && (
+                    <input
+                      type="number"
+                      value={product.quantity}
+                      onChange={(e) => handleProductChange(key, 'quantity', parseInt(e.target.value) || 0)}
+                      min="0"
+                      className={`w-20 px-2 py-1 rounded text-sm ${
+                        darkMode 
+                          ? 'bg-slate-700 text-slate-200 border-slate-600' 
+                          : 'bg-white text-slate-900 border-slate-300'
+                      } border focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    />
+                  )}
                 </div>
-                
-                {/* Product Specs */}
-                {product.selected && product.specs && Object.keys(product.specs).length > 0 && (
-                  <div className="ml-8 pl-4 border-l-2 border-slate-200 space-y-2">
-                    {Object.entries(product.specs).map(([spec, value]) => (
-                      <div key={spec} className="flex items-center space-x-2">
-                        <label htmlFor={`${key}-${spec}`} className={`text-sm flex-1 ${
-                          darkMode ? 'text-slate-400' : 'text-slate-600'
+                {product.selected && productTemplates[key].specs.length > 0 && (
+                  <div className="ml-8 grid grid-cols-2 gap-4">
+                    {productTemplates[key].specs.map((spec) => (
+                      <div key={spec} className="space-y-1">
+                        <label className={`block text-sm ${
+                          darkMode ? 'text-slate-300' : 'text-slate-700'
                         }`}>
                           {formatSpecName(spec)}
                         </label>
                         <input
                           type="text"
-                          id={`${key}-${spec}`}
-                          value={value}
+                          value={product.specs[spec] || ''}
                           onChange={(e) => handleProductChange(key, spec, e.target.value)}
-                          className={`w-32 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm ${
+                          className={`w-full px-3 py-1 rounded text-sm ${
                             darkMode 
-                              ? 'bg-slate-700 border-slate-600 text-slate-100' 
-                              : 'bg-white border-slate-300 text-slate-900'
-                          }`}
+                              ? 'bg-slate-700 text-slate-200 border-slate-600' 
+                              : 'bg-white text-slate-900 border-slate-300'
+                          } border focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         />
                       </div>
                     ))}
@@ -527,9 +451,11 @@ export default function OrderEntry({ onSubmit, darkMode, orders, productTemplate
 
       {/* Cart Selection */}
       <div className="mb-6">
-        <h3 className={`text-lg font-semibold mb-4 ${
+        <h3 className={`text-lg font-medium mb-4 ${
           darkMode ? 'text-slate-200' : 'text-slate-800'
-        }`}>Select Cart</h3>
+        }`}>
+          Select Cart
+        </h3>
         <div className="grid grid-cols-5 gap-4 mb-4">
           {[1, 2, 3, 4, 5].map((number) => (
             <button
