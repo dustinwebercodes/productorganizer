@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import OrderEntry from './components/OrderEntry';
 import OrdersTable from './components/OrdersTable';
 import ProductManager from './components/ProductManager';
 import { Order, Product, ProductTemplates } from './types/order';
+import { getOrders, addOrder, updateOrderStatus, updateOrderProducts, deleteOrder } from '@/lib/firebase/firebaseUtils';
 
 const SunIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -30,6 +31,17 @@ const CogIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
+const ChevronIcon = ({ expanded }: { expanded: boolean }) => (
+  <svg 
+    className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} 
+    fill="none" 
+    stroke="currentColor" 
+    viewBox="0 0 24 24"
+  >
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
   </svg>
 );
 
@@ -89,57 +101,169 @@ export default function Home() {
   const [darkMode, setDarkMode] = useState(false);
   const [showProductManager, setShowProductManager] = useState(false);
   const [productTemplates, setProductTemplates] = useState<ProductTemplates>(INITIAL_PRODUCTS);
+  const [loading, setLoading] = useState(true);
 
-  const handleNewOrder = (orderData: {
+  // Load orders when page loads
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  const loadOrders = async () => {
+    try {
+      console.log('Starting to fetch orders...');
+      const fetchedOrders = await getOrders();
+      console.log('Fetched orders:', fetchedOrders);
+      setOrders(fetchedOrders);
+    } catch (error) {
+      console.error('Error loading orders:', error);
+    } finally {
+      setLoading(false); // Make sure loading is set to false in both success and error cases
+    }
+  };
+
+  const handleNewOrder = async (orderData: {
     firstName: string;
     lastName: string;
     products: Record<string, Product>;
     cartNumber: number;
+    status?: 'open' | 'waiting';
   }) => {
-    const newOrder: Order = {
-      id: Date.now().toString(),
-      ...orderData,
-      status: 'open',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    setOrders(prev => [...prev, newOrder]);
+    try {
+      console.log('Submitting new order:', orderData);
+      const newOrder = await addOrder({
+        ...orderData,
+        status: orderData.status || 'open',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      console.log('Order created in Firebase:', newOrder);
+      
+      setOrders(prev => [...prev, newOrder]);
+    } catch (error) {
+      console.error('Error adding order:', error);
+    }
   };
 
-  const handleOrderComplete = (orderId: string) => {
-    setOrders(prev =>
-      prev.map(order =>
-        order.id === orderId
-          ? { ...order, status: 'completed', updatedAt: new Date() }
-          : order
-      )
-    );
+  const handleOrderComplete = async (orderId: string, newStatus: 'open' | 'completed') => {
+    try {
+      // If moving from waiting to open, find the first available cart number
+      if (newStatus === 'open') {
+        const occupiedCarts = orders
+          .filter(order => order.status === 'open')
+          .map(order => order.cartNumber);
+        
+        // Find first available cart number (1-10)
+        let availableCart = 1;
+        while (occupiedCarts.includes(availableCart) && availableCart <= 10) {
+          availableCart++;
+        }
+
+        if (availableCart > 10) {
+          alert('No carts available. Please complete some active orders first.');
+          return;
+        }
+
+        // Update order with new status and cart number
+        await updateOrderStatus(orderId, newStatus);
+        await updateOrderProducts(orderId, {
+          ...orders.find(o => o.id === orderId)?.products || {},
+          cartNumber: availableCart
+        });
+
+        setOrders(prev =>
+          prev.map(order =>
+            order.id === orderId
+              ? { 
+                  ...order, 
+                  status: newStatus, 
+                  cartNumber: availableCart,
+                  updatedAt: new Date() 
+                }
+              : order
+          )
+        );
+      } else {
+        // Normal completion flow
+        await updateOrderStatus(orderId, newStatus);
+        setOrders(prev =>
+          prev.map(order =>
+            order.id === orderId
+              ? { ...order, status: newStatus, updatedAt: new Date() }
+              : order
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error updating order:', error);
+    }
   };
 
-  const handleArchiveOrders = () => {
-    const now = new Date();
-    setOrders(prev =>
-      prev.map(order =>
-        order.status === 'completed'
-          ? { ...order, status: 'archived', archivedAt: now, updatedAt: now }
-          : order
-      )
-    );
+  const handleArchiveOrders = async () => {
+    try {
+      const completedOrders = orders.filter(order => order.status === 'completed');
+      
+      // Update each completed order to archived
+      await Promise.all(
+        completedOrders.map(order => updateOrderStatus(order.id, 'archived'))
+      );
+
+      setOrders(prev =>
+        prev.map(order =>
+          order.status === 'completed'
+            ? { ...order, status: 'archived', archivedAt: new Date(), updatedAt: new Date() }
+            : order
+        )
+      );
+    } catch (error) {
+      console.error('Error archiving orders:', error);
+    }
   };
 
   const handleSaveProducts = (newProducts: ProductTemplates) => {
     setProductTemplates(newProducts);
   };
 
+  const handleUpdateProducts = async (orderId: string, products: Record<string, Product>) => {
+    try {
+      await updateOrderProducts(orderId, products);
+      setOrders(prev =>
+        prev.map(order =>
+          order.id === orderId
+            ? { ...order, products, updatedAt: new Date() }
+            : order
+        )
+      );
+    } catch (error) {
+      console.error('Error updating products:', error);
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (window.confirm('Are you sure you want to delete this order? This cannot be undone.')) {
+      try {
+        await deleteOrder(orderId);
+        setOrders(prev => prev.filter(order => order.id !== orderId));
+      } catch (error) {
+        console.error('Error deleting order:', error);
+      }
+    }
+  };
+
   const openOrders = orders.filter(order => order.status === 'open');
   const completedOrders = orders.filter(order => order.status === 'completed');
   const archivedOrders = orders.filter(order => order.status === 'archived');
+  const waitingOrders = orders.filter(order => order.status === 'waiting');
+
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+    </div>;
+  }
 
   return (
-    <main className={`min-h-screen p-8 ${darkMode ? 'bg-slate-900' : 'bg-slate-100'}`}>
+    <main className={`min-h-screen p-8 ${darkMode ? 'bg-slate-900' : 'bg-white'} overflow-x-hidden`}>
       {/* Dark Mode and Product Manager Toggles */}
-      <div className="fixed top-4 right-4 flex gap-2">
+      <div className="fixed top-4 right-4 flex gap-2 z-30">
         <button
           onClick={() => setShowProductManager(true)}
           className={`p-2 rounded-lg ${
@@ -174,34 +298,36 @@ export default function Home() {
         />
       )}
       
-      <div className="grid grid-cols-12 gap-8">
+      <div className="grid grid-cols-12 gap-4 md:gap-8 relative">
         {/* Left Column - Order Entry */}
-        <div className={`col-span-3 ${
-          darkMode ? 'bg-slate-800' : 'bg-white'
-        } p-6 rounded-lg shadow-md`}>
-          <OrderEntry 
-            onSubmit={handleNewOrder}
-            darkMode={darkMode}
-            orders={orders}
-            productTemplates={productTemplates}
-          />
-        </div>
-
-        {/* Right Column - Order Tables */}
-        <div className="col-span-9 space-y-8">
-          <div className={`${
-            darkMode ? 'bg-slate-800' : 'bg-white'
-          } p-6 rounded-lg shadow-md`}>
-            <OrdersTable
-              orders={openOrders}
-              title="Open Orders"
-              onStatusChange={handleOrderComplete}
+        <div className="col-span-3">
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-white'} p-6 rounded-lg shadow-md`}>
+            <OrderEntry 
+              onSubmit={handleNewOrder}
               darkMode={darkMode}
+              orders={orders}
+              productTemplates={productTemplates}
             />
           </div>
-          <div className={`${
-            darkMode ? 'bg-slate-800' : 'bg-white'
-          } p-6 rounded-lg shadow-md`}>
+        </div>
+
+        {/* Middle Column - Main Order Tables */}
+        <div className="col-span-9 space-y-8">
+          {/* Open Orders */}
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-white'} p-6 rounded-lg shadow-md border-l-4 border-blue-500`}>
+            <OrdersTable
+              orders={orders}
+              title="Open Orders"
+              onStatusChange={handleOrderComplete}
+              onDelete={handleDeleteOrder}
+              darkMode={darkMode}
+              onUpdateProducts={handleUpdateProducts}
+              productTemplates={productTemplates}
+            />
+          </div>
+
+          {/* Completed Orders */}
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-white'} p-6 rounded-lg shadow-md border-l-4 border-green-500`}>
             <OrdersTable
               orders={completedOrders}
               title="Completed Orders"
@@ -209,10 +335,10 @@ export default function Home() {
               onArchive={handleArchiveOrders}
             />
           </div>
+
+          {/* Archived Orders */}
           {archivedOrders.length > 0 && (
-            <div className={`${
-              darkMode ? 'bg-slate-800' : 'bg-white'
-            } p-6 rounded-lg shadow-md`}>
+            <div className={`${darkMode ? 'bg-slate-800' : 'bg-white'} p-6 rounded-lg shadow-md border-t-4 border-slate-500`}>
               <OrdersTable
                 orders={archivedOrders}
                 title="Archived Orders"

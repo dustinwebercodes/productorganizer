@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Order } from '../types/order';
+import { Order, Product, ProductTemplates } from '../types/order';
+import EditProductsModal from './EditProductsModal';
+import OrderDetailsModal from './OrderDetailsModal';
 
 interface OrdersTableProps {
   orders: Order[];
@@ -9,6 +11,11 @@ interface OrdersTableProps {
   darkMode: boolean;
   onStatusChange?: (orderId: string) => void;
   onArchive?: () => void;
+  onUpdateProducts?: (orderId: string, products: Record<string, Product>) => void;
+  productTemplates: ProductTemplates;
+  isWaitingTable?: boolean;
+  compact?: boolean;
+  onDelete?: (orderId: string) => void;
 }
 
 const formatSpecName = (name: string) => {
@@ -39,10 +46,26 @@ const CART_COLORS = {
   10: { bg: 'bg-purple-600', text: 'text-white' },
 } as const;
 
-export default function OrdersTable({ orders, title, darkMode, onStatusChange, onArchive }: OrdersTableProps) {
+const TrashIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+);
+
+const EyeIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+  </svg>
+);
+
+export default function OrdersTable({ orders, title, darkMode, onStatusChange, onArchive, onUpdateProducts, productTemplates, isWaitingTable, compact, onDelete }: OrdersTableProps) {
   const [expandedProducts, setExpandedProducts] = useState<Record<string, boolean>>({});
   const [isCollapsed, setIsCollapsed] = useState(title === "Archived Orders");
   const [searchTerm, setSearchTerm] = useState('');
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
+  const [activeTab, setActiveTab] = useState<'active' | 'waiting'>('active');
 
   const toggleProductSpecs = (orderId: string) => {
     setExpandedProducts(prev => ({
@@ -61,17 +84,30 @@ export default function OrdersTable({ orders, title, darkMode, onStatusChange, o
   );
 
   // Filter orders based on search term
-  const filteredOrders = sortedOrders.filter(order => {
-    if (!searchTerm) return true;
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      order.firstName.toLowerCase().includes(searchLower) ||
-      order.lastName.toLowerCase().includes(searchLower) ||
-      Object.values(order.products)
-        .filter(product => product.selected)
-        .some(product => product.name.toLowerCase().includes(searchLower))
-    );
-  });
+  const filteredOrders = sortedOrders
+    .filter(order => {
+      if (isOpenOrdersTable) {
+        console.log('Filtering order:', order, 'activeTab:', activeTab);
+        
+        if (activeTab === 'active') {
+          return order.status === 'open' && order.cartNumber > 0;
+        } else if (activeTab === 'waiting') {
+          return order.status === 'waiting';
+        }
+      }
+      return order.status === title.toLowerCase().replace(' orders', '');
+    })
+    .filter(order => {
+      if (!searchTerm) return true;
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        order.firstName.toLowerCase().includes(searchLower) ||
+        order.lastName.toLowerCase().includes(searchLower) ||
+        Object.values(order.products)
+          .filter(product => product.selected)
+          .some(product => product.name.toLowerCase().includes(searchLower))
+      );
+    });
 
   return (
     <div className="w-full">
@@ -103,7 +139,7 @@ export default function OrdersTable({ orders, title, darkMode, onStatusChange, o
             )}
           </h2>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 mb-6">
           {(isArchivedOrdersTable || isCompletedOrdersTable) && orders.length > 0 && (
             <input
               type="text"
@@ -120,7 +156,7 @@ export default function OrdersTable({ orders, title, darkMode, onStatusChange, o
           {isCompletedOrdersTable && orders.length > 0 && onArchive && (
             <button
               onClick={onArchive}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`px-6 py-2.5 rounded-md text-sm font-medium transition-colors ${
                 darkMode
                   ? 'bg-slate-700 hover:bg-slate-600 text-white'
                   : 'bg-slate-900 hover:bg-slate-700 text-white'
@@ -131,17 +167,51 @@ export default function OrdersTable({ orders, title, darkMode, onStatusChange, o
           )}
         </div>
       </div>
+      {isOpenOrdersTable && (
+        <>
+          <div className="flex gap-4 mb-4">
+            <button
+              onClick={() => setActiveTab('active')}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === 'active'
+                  ? darkMode
+                    ? 'bg-slate-800 text-slate-200 border-b-2 border-blue-500'
+                    : 'bg-white text-slate-900 border-b-2 border-blue-500'
+                  : darkMode
+                    ? 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Active Orders ({orders.filter(order => order.status === 'open' && order.cartNumber > 0).length})
+            </button>
+            <button
+              onClick={() => setActiveTab('waiting')}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === 'waiting'
+                  ? darkMode
+                    ? 'bg-slate-800 text-slate-200 border-b-2 border-yellow-500'
+                    : 'bg-white text-slate-900 border-b-2 border-yellow-500'
+                  : darkMode
+                    ? 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Waiting Orders ({orders.filter(order => order.status === 'waiting').length})
+            </button>
+          </div>
+        </>
+      )}
       {!isCollapsed && (
         <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead className={darkMode ? 'bg-slate-700' : 'bg-slate-50'}>
+          <table className={`min-w-full ${compact ? 'text-sm' : ''}`}>
+            <thead className={`${darkMode ? 'bg-slate-700' : 'bg-slate-50'} ${compact ? 'text-xs' : ''}`}>
               <tr>
                 <th className={`px-6 py-3 text-left text-xs font-medium ${
                   darkMode ? 'text-slate-300' : 'text-slate-500'
                 } uppercase tracking-wider`}>
                   Date
                 </th>
-                {isOpenOrdersTable && (
+                {isOpenOrdersTable && activeTab === 'active' && (
                   <th className={`px-6 py-3 text-left text-xs font-medium ${
                     darkMode ? 'text-slate-300' : 'text-slate-500'
                   } uppercase tracking-wider`}>
@@ -159,7 +229,7 @@ export default function OrdersTable({ orders, title, darkMode, onStatusChange, o
                   Products
                 </th>
                 {onStatusChange && (
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${
+                  <th className={`px-6 py-3 text-center text-xs font-medium ${
                     darkMode ? 'text-slate-300' : 'text-slate-500'
                   } uppercase tracking-wider`}>
                     Actions
@@ -169,10 +239,10 @@ export default function OrdersTable({ orders, title, darkMode, onStatusChange, o
             </thead>
             <tbody className={`${
               darkMode ? 'bg-slate-800 divide-slate-700' : 'bg-white divide-slate-200'
-            } divide-y`}>
+            } divide-y ${compact ? 'text-sm' : ''}`}>
               {filteredOrders.map((order) => (
                 <tr key={order.id}>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className={`px-4 py-3 ${compact ? 'whitespace-normal' : 'whitespace-nowrap'}`}>
                     <div className={`text-sm ${
                       darkMode ? 'text-slate-200' : 'text-slate-900'
                     }`}>
@@ -186,7 +256,7 @@ export default function OrdersTable({ orders, title, darkMode, onStatusChange, o
                       )}
                     </div>
                   </td>
-                  {isOpenOrdersTable && (
+                  {isOpenOrdersTable && activeTab === 'active' && (
                     <td className="px-6 py-4 whitespace-nowrap">
                       {order.cartNumber && (
                         <span className={`
@@ -249,17 +319,57 @@ export default function OrdersTable({ orders, title, darkMode, onStatusChange, o
                     </div>
                   </td>
                   {onStatusChange && (
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => onStatusChange(order.id)}
-                        className={`${
-                          darkMode 
-                            ? 'text-blue-400 hover:text-blue-300'
-                            : 'text-blue-600 hover:text-blue-900'
-                        }`}
-                      >
-                        Mark Complete
-                      </button>
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                      <div className="flex items-center justify-center space-x-4">
+                        <button
+                          onClick={() => setEditingOrder(order)}
+                          className={`${
+                            darkMode 
+                              ? 'text-green-400 hover:text-green-300'
+                              : 'text-green-600 hover:text-green-900'
+                          }`}
+                        >
+                          Edit Products
+                        </button>
+                        {activeTab === 'waiting' ? (
+                          <div className="flex items-center justify-center space-x-4">
+                            <button
+                              onClick={() => onStatusChange(order.id, 'open')}
+                              className={`${
+                                darkMode 
+                                  ? 'text-blue-400 hover:text-blue-300'
+                                  : 'text-blue-600 hover:text-blue-900'
+                              }`}
+                            >
+                              Move to Open Orders →
+                            </button>
+                            {onDelete && (
+                              <button
+                                onClick={() => onDelete(order.id)}
+                                className={`${
+                                  darkMode 
+                                    ? 'text-red-400 hover:text-red-300'
+                                    : 'text-red-600 hover:text-red-900'
+                                }`}
+                                title="Delete Order"
+                              >
+                                <TrashIcon />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => onStatusChange(order.id, 'completed')}
+                            className={`${
+                              darkMode 
+                                ? 'text-blue-400 hover:text-blue-300'
+                                : 'text-blue-600 hover:text-blue-900'
+                            }`}
+                          >
+                            Mark Complete
+                          </button>
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>
@@ -275,6 +385,27 @@ export default function OrdersTable({ orders, title, darkMode, onStatusChange, o
           )}
         </div>
       )}
+      {editingOrder && (
+        <EditProductsModal
+          order={editingOrder}
+          darkMode={darkMode}
+          onClose={() => setEditingOrder(null)}
+          onSave={(products) => {
+            if (onUpdateProducts) {
+              onUpdateProducts(editingOrder.id, products);
+            }
+            setEditingOrder(null);
+          }}
+          productTemplates={productTemplates}
+        />
+      )}
+      {viewingOrder && (
+        <OrderDetailsModal
+          order={viewingOrder}
+          darkMode={darkMode}
+          onClose={() => setViewingOrder(null)}
+        />
+      )}
     </div>
   );
-} 
+}

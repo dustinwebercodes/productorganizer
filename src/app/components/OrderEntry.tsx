@@ -9,6 +9,7 @@ interface OrderEntryProps {
     lastName: string;
     products: Record<string, Product>;
     cartNumber: number;
+    status?: 'open' | 'waiting';
   }) => void;
   darkMode: boolean;
   orders: Order[];
@@ -72,6 +73,18 @@ const CART_COLORS = {
   9: { bg: 'bg-cyan-400', text: 'text-black' },
   10: { bg: 'bg-purple-600', text: 'text-white' },
 } as const;
+
+const TrashIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+);
+
+const ClockIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
 
 export default function OrderEntry({ onSubmit, darkMode, orders, productTemplates }: OrderEntryProps) {
   const [firstName, setFirstName] = useState('');
@@ -162,13 +175,28 @@ export default function OrderEntry({ onSubmit, darkMode, orders, productTemplate
       firstName, 
       lastName, 
       products,
-      cartNumber: selectedCart 
+      cartNumber: selectedCart,
+      status: 'open'
     });
-    // Reset form
+    
+    // Reset form with template-based products
     setFirstName('');
     setLastName('');
-    setProducts(INITIAL_PRODUCTS);
     setSelectedCart(null);
+    
+    // Reset products based on current templates
+    setProducts(Object.entries(productTemplates).reduce((acc, [id, template]) => ({
+      ...acc,
+      [id]: {
+        name: template.name,
+        quantity: 0,
+        selected: false,
+        specs: template.specs.reduce((specs, spec) => ({
+          ...specs,
+          [spec]: ''
+        }), {})
+      }
+    }), {}));
   };
 
   const handleProductChange = (productKey: string, field: ProductField, value: boolean | number | string) => {
@@ -209,6 +237,59 @@ export default function OrderEntry({ onSubmit, darkMode, orders, productTemplate
     });
     setProducts(newProducts);
     setShowPreviousOrders(false);
+  };
+
+  const handleReset = () => {
+    setFirstName('');
+    setLastName('');
+    setSelectedCart(null);
+    setProducts(Object.entries(productTemplates).reduce((acc, [id, template]) => ({
+      ...acc,
+      [id]: {
+        name: template.name,
+        quantity: 0,
+        selected: false,
+        specs: template.specs.reduce((specs, spec) => ({
+          ...specs,
+          [spec]: ''
+        }), {})
+      }
+    }), {}));
+  };
+
+  const handleSubmitToWaiting = () => {
+    if (!firstName || !lastName) {
+      alert('Please enter customer name');
+      return;
+    }
+
+    // Add console.log to debug
+    console.log('Submitting waiting order:', {
+      firstName,
+      lastName,
+      products: Object.entries(products)
+        .filter(([_, product]) => product.selected)
+        .reduce((acc, [key, product]) => ({
+          ...acc,
+          [key]: product
+        }), {}),
+      cartNumber: 0,
+      status: 'waiting'
+    });
+
+    onSubmit({
+      firstName,
+      lastName,
+      products: Object.entries(products)
+        .filter(([_, product]) => product.selected)
+        .reduce((acc, [key, product]) => ({
+          ...acc,
+          [key]: product
+        }), {}),
+      cartNumber: 0,
+      status: 'waiting'
+    });
+    handleReset();
   };
 
   return (
@@ -454,7 +535,7 @@ export default function OrderEntry({ onSubmit, darkMode, orders, productTemplate
             <button
               key={number}
               type="button"
-              onClick={() => setSelectedCart(number)}
+              onClick={() => setSelectedCart(selectedCart === number ? null : number)}
               disabled={occupiedCarts.includes(number)}
               className={`
                 aspect-square rounded-lg flex items-center justify-center text-lg font-semibold
@@ -479,7 +560,7 @@ export default function OrderEntry({ onSubmit, darkMode, orders, productTemplate
             <button
               key={number}
               type="button"
-              onClick={() => setSelectedCart(number)}
+              onClick={() => setSelectedCart(selectedCart === number ? null : number)}
               disabled={occupiedCarts.includes(number)}
               className={`
                 aspect-square rounded-lg flex items-center justify-center text-lg font-semibold
@@ -502,17 +583,43 @@ export default function OrderEntry({ onSubmit, darkMode, orders, productTemplate
       </div>
 
       {/* Submit Button */}
-      <button
-        type="submit"
-        disabled={selectedCart === null}
-        className={`w-full py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-          darkMode
-            ? 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-offset-slate-800 disabled:bg-slate-700 disabled:text-slate-500'
-            : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-slate-200 disabled:text-slate-400'
-        }`}
-      >
-        {selectedCart ? `Submit Order to Cart ${selectedCart}` : 'Select a Cart'}
-      </button>
+      <div className="flex gap-4">
+        <button
+          type="button"
+          onClick={handleReset}
+          className={`p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${
+            darkMode
+              ? 'bg-red-600 hover:bg-red-700 text-white focus:ring-offset-slate-800'
+              : 'bg-red-600 hover:bg-red-700 text-white'
+          }`}
+          title="Clear form"
+        >
+          <TrashIcon />
+        </button>
+        <button
+          type="button"
+          onClick={handleSubmitToWaiting}
+          className={`p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 ${
+            darkMode
+              ? 'bg-yellow-600 hover:bg-yellow-700 text-white focus:ring-offset-slate-800'
+              : 'bg-yellow-600 hover:bg-yellow-700 text-white'
+          }`}
+          title="Move to waiting"
+        >
+          <ClockIcon />
+        </button>
+        <button
+          type="submit"
+          disabled={selectedCart === null}
+          className={`flex-1 py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+            darkMode
+              ? 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-offset-slate-800 disabled:bg-slate-700 disabled:text-slate-500'
+              : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-slate-200 disabled:text-slate-400'
+          }`}
+        >
+          {selectedCart ? `Submit Order to Cart ${selectedCart}` : 'Select a Cart'}
+        </button>
+      </div>
     </form>
   );
 } 
