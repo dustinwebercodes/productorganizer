@@ -174,7 +174,18 @@ export default function OrderEntry({ onSubmit, darkMode, orders, productTemplate
     onSubmit({ 
       firstName, 
       lastName, 
-      products,
+      products: Object.entries(products)
+        .filter(([_, product]) => product.selected)
+        .reduce((acc, [key, product]) => ({
+          ...acc,
+          [key]: {
+            id: key,
+            name: product.name,
+            quantity: product.quantity,
+            selected: product.selected,
+            specs: product.specs
+          }
+        }), {}),
       cartNumber: selectedCart,
       status: 'open'
     });
@@ -270,7 +281,13 @@ export default function OrderEntry({ onSubmit, darkMode, orders, productTemplate
         .filter(([_, product]) => product.selected)
         .reduce((acc, [key, product]) => ({
           ...acc,
-          [key]: product
+          [key]: {
+            id: key,
+            name: product.name,
+            quantity: product.quantity,
+            selected: product.selected,
+            specs: product.specs
+          }
         }), {}),
       cartNumber: 0,
       status: 'waiting'
